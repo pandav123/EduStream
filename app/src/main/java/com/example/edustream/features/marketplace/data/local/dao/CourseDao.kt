@@ -7,11 +7,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CourseDao {
-    @Query("SELECT * FROM course_table ORDER BY createdAt DESC")
-    fun getAllCourses(): PagingSource<Int, CourseEntity>
+    @Query("SELECT * FROM course_table WHERE (:query IS NULL OR title LIKE '%' || :query || '%') ORDER BY createdAt DESC")
+    fun getAllCourses(query: String? = null): PagingSource<Int, CourseEntity>
 
-    @Query("SELECT * FROM course_table WHERE category = :category ORDER BY createdAt DESC")
-    fun getCoursesByCategory(category: String): PagingSource<Int, CourseEntity>
+    @Query("SELECT * FROM course_table ORDER BY createdAt DESC LIMIT 10")
+    fun getLatestCourses(): Flow<List<CourseEntity>>
+
+    @Query("SELECT * FROM course_table WHERE category = :category AND (:query IS NULL OR title LIKE '%' || :query || '%') ORDER BY createdAt DESC")
+    fun getCoursesByCategory(category: String, query: String? = null): PagingSource<Int, CourseEntity>
 
     @Query("SELECT * FROM course_table WHERE courseId = :courseId")
     fun getCourseById(courseId: String): Flow<CourseEntity?>

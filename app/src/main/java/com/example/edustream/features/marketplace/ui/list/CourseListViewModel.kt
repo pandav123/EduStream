@@ -8,6 +8,7 @@ import com.example.edustream.features.marketplace.data.local.entities.CourseEnti
 import com.example.edustream.features.marketplace.domain.repository.CourseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,9 +21,17 @@ class CourseListViewModel @Inject constructor(
     private val _selectedCategory = MutableStateFlow<String?>(null)
     val selectedCategory = _selectedCategory.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val courses: Flow<PagingData<CourseEntity>> = _selectedCategory.flatMapLatest { category ->
-        repository.getCourses(category)
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val courses: Flow<PagingData<CourseEntity>> = combine(
+        _selectedCategory,
+        _searchQuery.debounce(300L)
+    ) { category, query ->
+        category to query
+    }.flatMapLatest { (category, query) ->
+        repository.getCourses(category, query)
     }.onStart {
         repository.refreshCourses() // Ensure dummy data is present
     }.cachedIn(viewModelScope)
@@ -33,6 +42,10 @@ class CourseListViewModel @Inject constructor(
 
     fun selectCategory(category: String?) {
         _selectedCategory.value = category
+    }
+
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
     }
 
     fun refreshCourses() {

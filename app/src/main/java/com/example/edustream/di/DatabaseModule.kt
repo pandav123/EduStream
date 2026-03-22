@@ -3,8 +3,7 @@ package com.example.edustream.di
 import android.content.Context
 import androidx.room.Room
 import com.example.edustream.data.local.EduStreamDatabase
-import com.example.edustream.features.marketplace.data.local.dao.CourseDao
-import com.example.edustream.features.marketplace.data.local.dao.LectureDao
+import com.example.edustream.features.marketplace.data.local.dao.*
 import com.example.edustream.features.player.data.local.dao.PlaybackProgressDao
 import com.example.edustream.features.downloads.data.local.dao.DownloadDao
 import com.example.edustream.features.payments.data.local.dao.OrderDao
@@ -39,6 +38,16 @@ object DatabaseModule {
     @Provides
     fun provideLectureDao(database: EduStreamDatabase): LectureDao {
         return database.lectureDao()
+    }
+
+    @Provides
+    fun provideQuizDao(database: EduStreamDatabase): QuizDao {
+        return database.quizDao()
+    }
+
+    @Provides
+    fun provideNoteDao(database: EduStreamDatabase): NoteDao {
+        return database.noteDao()
     }
 
     @Provides

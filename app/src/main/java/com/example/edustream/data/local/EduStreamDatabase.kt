@@ -2,10 +2,9 @@ package com.example.edustream.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import com.example.edustream.features.marketplace.data.local.dao.CourseDao
-import com.example.edustream.features.marketplace.data.local.dao.LectureDao
-import com.example.edustream.features.marketplace.data.local.entities.CourseEntity
-import com.example.edustream.features.marketplace.data.local.entities.LectureEntity
+import androidx.room.TypeConverters
+import com.example.edustream.features.marketplace.data.local.dao.*
+import com.example.edustream.features.marketplace.data.local.entities.*
 import com.example.edustream.features.player.data.local.dao.PlaybackProgressDao
 import com.example.edustream.features.player.data.local.entities.PlaybackProgressEntity
 import com.example.edustream.features.downloads.data.local.dao.DownloadDao
@@ -21,18 +20,24 @@ import com.example.edustream.features.progress.data.local.entities.LectureComple
     entities = [
         CourseEntity::class,
         LectureEntity::class,
+        QuizEntity::class,
+        QuestionEntity::class,
+        NoteEntity::class,
         PlaybackProgressEntity::class,
         DownloadEntity::class,
         OrderEntity::class,
         SubscriptionEntity::class,
         LectureCompletionEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
+@TypeConverters(Converters::class)
 abstract class EduStreamDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun lectureDao(): LectureDao
+    abstract fun quizDao(): QuizDao
+    abstract fun noteDao(): NoteDao
     abstract fun playbackProgressDao(): PlaybackProgressDao
     abstract fun downloadDao(): DownloadDao
     abstract fun orderDao(): OrderDao

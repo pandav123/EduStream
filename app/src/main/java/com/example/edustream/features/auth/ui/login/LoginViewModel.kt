@@ -19,14 +19,18 @@ class LoginViewModel @Inject constructor(
     private val _loginState = MutableStateFlow<UiState<FirebaseUser>?>(null)
     val loginState = _loginState.asStateFlow()
 
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin = _isAdmin.asStateFlow()
+
     fun login(email: String, password: String) {
         viewModelScope.launch {
             _loginState.value = UiState.Loading
             val result = authRepository.login(email, password)
-            _loginState.value = if (result.isSuccess) {
-                UiState.Success(result.getOrThrow())
+            if (result.isSuccess) {
+                _isAdmin.value = authRepository.isAdmin()
+                _loginState.value = UiState.Success(result.getOrThrow())
             } else {
-                UiState.Error(result.exceptionOrNull()?.message ?: "Login failed")
+                _loginState.value = UiState.Error(result.exceptionOrNull()?.message ?: "Login failed")
             }
         }
     }

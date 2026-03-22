@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     onBackClick: () -> Unit,
@@ -27,11 +26,64 @@ fun ProfileScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToCertificates: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToAdmin: () -> Unit,
     onLogout: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val user by viewModel.user.collectAsState()
+    val isAdmin by viewModel.isAdmin.collectAsState()
 
+    when (isAdmin) {
+        null -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        true -> {
+            AdminProfileScreen(
+                name = user?.displayName ?: "Admin",
+                email = user?.email ?: "",
+                onBackClick = onBackClick,
+                onNavigateToAdmin = onNavigateToAdmin,
+                onNavigateToSettings = onNavigateToSettings,
+                onLogout = {
+                    viewModel.logout()
+                    onLogout()
+                }
+            )
+        }
+        false -> {
+            UserProfileScreen(
+                name = user?.displayName ?: "User",
+                email = user?.email ?: "",
+                onBackClick = onBackClick,
+                onNavigateToMyCourses = onNavigateToMyCourses,
+                onNavigateToSubscriptions = onNavigateToSubscriptions,
+                onNavigateToHistory = onNavigateToHistory,
+                onNavigateToCertificates = onNavigateToCertificates,
+                onNavigateToSettings = onNavigateToSettings,
+                onLogout = {
+                    viewModel.logout()
+                    onLogout()
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UserProfileScreen(
+    name: String,
+    email: String,
+    onBackClick: () -> Unit,
+    onNavigateToMyCourses: () -> Unit,
+    onNavigateToSubscriptions: () -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToCertificates: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onLogout: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -42,10 +94,7 @@ fun ProfileScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { 
-                        viewModel.logout()
-                        onLogout()
-                    }) {
+                    IconButton(onClick = onLogout) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout")
                     }
                 }
@@ -58,10 +107,7 @@ fun ProfileScreen(
                 .padding(innerPadding)
         ) {
             item {
-                UserProfileHeader(
-                    name = user?.displayName ?: "User",
-                    email = user?.email ?: ""
-                )
+                ProfileHeader(name = name, email = email, isAdmin = false)
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
@@ -105,8 +151,64 @@ fun ProfileScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UserProfileHeader(name: String, email: String) {
+fun AdminProfileScreen(
+    name: String,
+    email: String,
+    onBackClick: () -> Unit,
+    onNavigateToAdmin: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onLogout: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Admin Profile") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            item {
+                ProfileHeader(name = name, email = email, isAdmin = true)
+            }
+
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+
+            item {
+                ProfileMenuItem(
+                    icon = Icons.Default.AdminPanelSettings,
+                    title = "Admin Dashboard",
+                    onClick = onNavigateToAdmin
+                )
+            }
+            item {
+                ProfileMenuItem(
+                    icon = Icons.Default.Settings,
+                    title = "General Settings",
+                    onClick = onNavigateToSettings
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileHeader(name: String, email: String, isAdmin: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -116,18 +218,30 @@ fun UserProfileHeader(name: String, email: String) {
         Surface(
             modifier = Modifier.size(80.dp),
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.primaryContainer
+            color = if (isAdmin) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
                     text = name.take(1).uppercase(),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (isAdmin) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            if (isAdmin) {
+                Spacer(modifier = Modifier.width(8.dp))
+                SuggestionChip(
+                    onClick = { },
+                    label = { Text("Admin") },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        labelColor = MaterialTheme.colorScheme.error
+                    )
+                )
+            }
+        }
         Text(text = email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
     }
 }

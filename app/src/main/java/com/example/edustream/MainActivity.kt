@@ -1,36 +1,61 @@
 package com.example.edustream
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.edustream.features.profile.ui.ProfileViewModel
 import com.example.edustream.ui.navigation.*
 import com.example.edustream.ui.theme.EduStreamTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        // Handle permission result if needed
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        askNotificationPermission()
         setContent {
             EduStreamTheme {
                 EduStreamAppContent()
+            }
+        }
+    }
+
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -41,15 +66,18 @@ fun EduStreamAppContent() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    
+    val profileViewModel: ProfileViewModel = hiltViewModel()
+    val isAdmin by profileViewModel.isAdmin.collectAsState()
 
-    // Define which routes should NOT show the bottom bar
     val noBottomBarRoutes = listOf(
         LoginRoute::class.qualifiedName,
         RegisterRoute::class.qualifiedName,
-        "com.example.edustream.ui.navigation.PlayerRoute" // Using string for data class
+        "com.example.edustream.ui.navigation.PlayerRoute"
     )
 
-    val showBottomBar = currentDestination?.route !in noBottomBarRoutes
+    // Only show bottom bar for non-admin users on specific routes
+    val showBottomBar = currentDestination?.route !in noBottomBarRoutes && isAdmin == false
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -69,11 +97,11 @@ fun EduStreamAppContent() {
                         }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("Search") },
-                        selected = currentDestination?.hierarchy?.any { it.route == SearchRoute::class.qualifiedName } == true,
+                        icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, contentDescription = null) },
+                        label = { Text("Courses") },
+                        selected = currentDestination?.hierarchy?.any { it.route == CourseListRoute::class.qualifiedName } == true,
                         onClick = {
-                            navController.navigate(SearchRoute) {
+                            navController.navigate(CourseListRoute) {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true

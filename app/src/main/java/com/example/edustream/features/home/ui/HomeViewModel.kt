@@ -27,14 +27,18 @@ class HomeViewModel @Inject constructor(
     val inProgressCourses = _inProgressCourses.asStateFlow()
 
     init {
-        loadHomeData()
         observeInProgressCourses()
         observeFeaturedCourses()
+        loadHomeData()
     }
 
     private fun observeFeaturedCourses() {
         viewModelScope.launch {
-            repository.refreshCourses()
+            courseDao.getLatestCourses().collectLatest { courses ->
+                if (courses.isNotEmpty()) {
+                    _featuredCourses.value = UiState.Success(courses)
+                }
+            }
         }
     }
 
@@ -48,12 +52,18 @@ class HomeViewModel @Inject constructor(
 
     fun loadHomeData() {
         viewModelScope.launch {
-            _featuredCourses.value = UiState.Loading
-            repository.refreshCourses()
-            _featuredCourses.value = UiState.Success(listOf(
-                CourseEntity("1", "Android Development", "Learn Compose", "instr_1", "https://developer.android.com/static/images/courses/android-basics-compose.png", "", 4999.0, 9999.0, "Development", 4.8f, 1200, 50, 36000, false, System.currentTimeMillis()),
-                CourseEntity("2", "UI/UX Design", "Design beautiful apps", "instr_2", "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/27cc6a105243111.5f749a099092b.png", "", 2999.0, null, "Design", 4.5f, 800, 30, 25000, true, System.currentTimeMillis())
-            ))
+            try {
+                repository.refreshCourses()
+                // If the list is still empty after refresh, we might want to show an empty state
+                val currentCourses = courseDao.getLatestCourses().first()
+                if (currentCourses.isEmpty() && _featuredCourses.value is UiState.Loading) {
+                    _featuredCourses.value = UiState.Success(emptyList())
+                }
+            } catch (e: Exception) {
+                if (_featuredCourses.value is UiState.Loading) {
+                    _featuredCourses.value = UiState.Error(e.message ?: "Failed to load courses")
+                }
+            }
         }
     }
 }

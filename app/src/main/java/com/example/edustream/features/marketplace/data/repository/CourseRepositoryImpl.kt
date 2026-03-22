@@ -3,13 +3,13 @@ package com.example.edustream.features.marketplace.data.repository
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
-import com.example.edustream.features.marketplace.data.local.dao.CourseDao
-import com.example.edustream.features.marketplace.data.local.dao.LectureDao
-import com.example.edustream.features.marketplace.data.local.entities.CourseEntity
-import com.example.edustream.features.marketplace.data.local.entities.LectureEntity
-import com.example.edustream.features.marketplace.data.remote.api.CourseApiService
+import com.example.edustream.features.marketplace.data.local.dao.*
+import com.example.edustream.features.marketplace.data.local.entities.*
 import com.example.edustream.features.marketplace.domain.repository.CourseRepository
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,27 +17,17 @@ import javax.inject.Singleton
 class CourseRepositoryImpl @Inject constructor(
     private val courseDao: CourseDao,
     private val lectureDao: LectureDao,
-    private val apiService: CourseApiService
+    private val quizDao: QuizDao,
+    private val noteDao: NoteDao,
+    private val firestore: FirebaseFirestore
 ) : CourseRepository {
 
-    private val dummyCourses = listOf(
-        CourseEntity("1", "Android Development with Jetpack Compose", "Master modern Android UI development.", "instr_1", "https://developer.android.com/static/images/courses/android-basics-compose.png", "", 4999.0, 9999.0, "Development", 4.8f, 1200, 50, 36000, false, System.currentTimeMillis()),
-        CourseEntity("2", "UI/UX Design Essentials", "Learn to create beautiful user interfaces.", "instr_2", "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/27cc6a105243111.5f749a099092b.png", "", 2999.0, null, "Design", 4.5f, 800, 30, 25000, true, System.currentTimeMillis() - 86400000),
-        CourseEntity("3", "Business Strategy for Beginners", "Fundamentals of running a successful business.", "instr_3", "https://img-c.udemycdn.com/course/750x422/123456_1234.jpg", "", 1999.0, 3999.0, "Business", 4.2f, 500, 20, 15000, false, System.currentTimeMillis() - 172800000)
-    )
-
-    private val dummyLectures = listOf(
-        LectureEntity("l1", "1", "Introduction to Compose", "What is Jetpack Compose?", "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", 300, 1, true),
-        LectureEntity("l2", "1", "Composables and State", "Deep dive into state management.", "https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", 600, 2, false),
-        LectureEntity("l3", "2", "Introduction to Figma", "Getting started with Figma.", "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 450, 1, true)
-    )
-
-    override fun getCourses(category: String?): Flow<PagingData<CourseEntity>> {
+    override fun getCourses(category: String?, query: String?): Flow<PagingData<CourseEntity>> {
         return Pager(
             config = PagingConfig(pageSize = 20),
             pagingSourceFactory = { 
-                if (category == null) courseDao.getAllCourses() 
-                else courseDao.getCoursesByCategory(category)
+                if (category == null) courseDao.getAllCourses(query) 
+                else courseDao.getCoursesByCategory(category, query)
             }
         ).flow
     }
@@ -50,23 +40,150 @@ class CourseRepositoryImpl @Inject constructor(
         return lectureDao.getLecturesByCourseId(courseId)
     }
 
+    override fun getQuizzes(courseId: String): Flow<List<QuizEntity>> {
+        return quizDao.getQuizzesByCourseId(courseId)
+    }
+
+    override fun getQuestions(quizId: String): Flow<List<QuestionEntity>> {
+        return quizDao.getQuestionsByQuizId(quizId)
+    }
+
+    override fun getNotes(courseId: String): Flow<List<NoteEntity>> {
+        return noteDao.getNotesByCourseId(courseId)
+    }
+
     override fun getPurchasedCourses(): Flow<List<CourseEntity>> {
         return courseDao.getPurchasedCourses()
     }
 
     override fun searchCourses(query: String, category: String?): Flow<PagingData<CourseEntity>> {
-        return Pager(
-            config = PagingConfig(pageSize = 20),
-            pagingSourceFactory = { courseDao.getAllCourses() }
-        ).flow
+        return getCourses(category, query)
     }
 
     override suspend fun refreshCourses() {
-        courseDao.insertAll(dummyCourses)
+        try {
+            val snapshot = firestore.collection("courses").get().await()
+            val entities = snapshot.documents.mapNotNull { doc ->
+                val id = doc.id
+                val title = doc.getString("title") ?: ""
+                val description = doc.getString("description") ?: ""
+                val instructorId = doc.getString("instructorId") ?: ""
+                val thumbnailUrl = doc.getString("thumbnailUrl") ?: ""
+                val previewVideoUrl = doc.getString("previewVideoUrl") ?: ""
+                val price = doc.getDouble("price") ?: 0.0
+                val discountPrice = doc.getDouble("discountPrice")
+                val category = doc.getString("category") ?: ""
+                val rating = doc.getDouble("rating")?.toFloat() ?: 0f
+                val enrollmentCount = doc.getLong("enrollmentCount")?.toInt() ?: 0
+                val totalLectures = doc.getLong("totalLectures")?.toInt() ?: 0
+                val totalDuration = doc.getLong("totalDuration") ?: 0L
+                val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+
+                // Check local DB to preserve purchase status
+                val existing = courseDao.getCourseById(id).firstOrNull()
+                val isPurchased = existing?.isPurchased ?: false
+
+                CourseEntity(
+                    courseId = id,
+                    title = title,
+                    description = description,
+                    instructorId = instructorId,
+                    thumbnailUrl = thumbnailUrl,
+                    previewVideoUrl = previewVideoUrl,
+                    price = price,
+                    discountPrice = discountPrice,
+                    category = category,
+                    rating = rating,
+                    enrollmentCount = enrollmentCount,
+                    totalLectures = totalLectures,
+                    totalDuration = totalDuration,
+                    isPurchased = isPurchased,
+                    createdAt = createdAt
+                )
+            }
+            courseDao.insertAll(entities)
+        } catch (e: Exception) {
+            // Handle error
+        }
     }
 
     override suspend fun refreshLectures(courseId: String) {
-        lectureDao.insertAll(dummyLectures.filter { it.courseId == courseId })
+        try {
+            val snapshot = firestore.collection("courses").document(courseId).collection("lectures").get().await()
+            val entities = snapshot.documents.mapNotNull { doc ->
+                LectureEntity(
+                    lectureId = doc.id,
+                    courseId = courseId,
+                    title = doc.getString("title") ?: "",
+                    description = doc.getString("description") ?: "",
+                    videoUrl = doc.getString("videoUrl") ?: "",
+                    duration = doc.getLong("duration") ?: 0L,
+                    orderIndex = doc.getLong("orderIndex")?.toInt() ?: 0,
+                    isPreview = doc.getBoolean("isPreview") ?: false
+                )
+            }
+            lectureDao.insertAll(entities)
+        } catch (e: Exception) {}
+    }
+
+    override suspend fun refreshQuizzes(courseId: String) {
+        try {
+            val snapshot = firestore.collection("courses").document(courseId).collection("quizzes").get().await()
+            val entities = snapshot.documents.mapNotNull { doc ->
+                QuizEntity(
+                    quizId = doc.id,
+                    courseId = courseId,
+                    title = doc.getString("title") ?: "",
+                    description = doc.getString("description") ?: "",
+                    totalQuestions = doc.getLong("totalQuestions")?.toInt() ?: 0,
+                    orderIndex = doc.getLong("orderIndex")?.toInt() ?: 0
+                )
+            }
+            quizDao.insertQuizzes(entities)
+            
+            entities.forEach { quiz ->
+                refreshQuestions(quiz.quizId, courseId)
+            }
+        } catch (e: Exception) {}
+    }
+
+    private suspend fun refreshQuestions(quizId: String, courseId: String) {
+        try {
+            val snapshot = firestore.collection("courses").document(courseId)
+                .collection("quizzes").document(quizId).collection("questions").get().await()
+            val entities = snapshot.documents.mapNotNull { doc ->
+                @Suppress("UNCHECKED_CAST")
+                QuestionEntity(
+                    questionId = doc.id,
+                    quizId = quizId,
+                    questionText = doc.getString("questionText") ?: "",
+                    options = doc.get("options") as? List<String> ?: emptyList(),
+                    correctAnswerIndex = doc.getLong("correctAnswerIndex")?.toInt() ?: 0,
+                    explanation = doc.getString("explanation") ?: ""
+                )
+            }
+            quizDao.insertQuestions(entities)
+        } catch (e: Exception) {}
+    }
+
+    override suspend fun refreshNotes(courseId: String) {
+        try {
+            // Fetching from top-level "pdfs" collection as requested
+            val snapshot = firestore.collection("pdfs")
+                .whereEqualTo("courseId", courseId)
+                .get().await()
+            val entities = snapshot.documents.mapNotNull { doc ->
+                NoteEntity(
+                    noteId = doc.getString("id") ?: doc.id,
+                    courseId = doc.getString("courseId") ?: courseId,
+                    title = doc.getString("name") ?: "",
+                    pdfUrl = doc.getString("url") ?: "",
+                    fileSize = "",
+                    createdAt = doc.getLong("uploadedAt") ?: System.currentTimeMillis()
+                )
+            }
+            noteDao.insertAll(entities)
+        } catch (e: Exception) {}
     }
 
     override suspend fun purchaseCourse(courseId: String) {
